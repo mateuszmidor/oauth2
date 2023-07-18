@@ -122,7 +122,7 @@ const (
 // small.
 var authStyleCache struct {
 	sync.Mutex
-	m map[string]AuthStyle // keyed by tokenURL
+	m map[string]AuthStyle // keyed by tokenURL+clientID
 }
 
 // ResetAuthCache resets the global authentication style cache used
@@ -135,21 +135,21 @@ func ResetAuthCache() {
 
 // lookupAuthStyle reports which auth style we last used with tokenURL
 // when calling RetrieveToken and whether we have ever done so.
-func lookupAuthStyle(tokenURL string) (style AuthStyle, ok bool) {
+func lookupAuthStyle(tokenURL, clientID string) (style AuthStyle, ok bool) {
 	authStyleCache.Lock()
 	defer authStyleCache.Unlock()
-	style, ok = authStyleCache.m[tokenURL]
+	style, ok = authStyleCache.m[tokenURL+clientID]
 	return
 }
 
 // setAuthStyle adds an entry to authStyleCache, documented above.
-func setAuthStyle(tokenURL string, v AuthStyle) {
+func setAuthStyle(tokenURL, clientID string, v AuthStyle) {
 	authStyleCache.Lock()
 	defer authStyleCache.Unlock()
 	if authStyleCache.m == nil {
 		authStyleCache.m = make(map[string]AuthStyle)
 	}
-	authStyleCache.m[tokenURL] = v
+	authStyleCache.m[tokenURL+clientID] = v
 }
 
 // newTokenRequest returns a new *http.Request to retrieve a new token
@@ -192,7 +192,7 @@ func cloneURLValues(v url.Values) url.Values {
 func RetrieveToken(ctx context.Context, clientID, clientSecret, tokenURL string, v url.Values, authStyle AuthStyle) (*Token, error) {
 	needsAuthStyleProbe := authStyle == 0
 	if needsAuthStyleProbe {
-		if style, ok := lookupAuthStyle(tokenURL); ok {
+		if style, ok := lookupAuthStyle(tokenURL, clientID); ok {
 			authStyle = style
 			needsAuthStyleProbe = false
 		} else {
@@ -222,7 +222,7 @@ func RetrieveToken(ctx context.Context, clientID, clientSecret, tokenURL string,
 		token, err = doTokenRoundTrip(ctx, req)
 	}
 	if needsAuthStyleProbe && err == nil {
-		setAuthStyle(tokenURL, authStyle)
+		setAuthStyle(tokenURL, clientID, authStyle)
 	}
 	// Don't overwrite `RefreshToken` with an empty value
 	// if this was a token refreshing request.
